@@ -88,7 +88,6 @@ select,.btn,input[type=text]{background:var(--panel);border:1px solid var(--line
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:8px}
 .schem{grid-area:schem;position:relative;overflow:hidden;min-height:0}
 .schem canvas{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
-.schem #grid-toggle{position:absolute;top:10px;right:10px;z-index:1}
 .scope{grid-area:scope;display:flex;flex-direction:column;min-height:0;padding:10px;gap:8px}
 .scope-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
 .scope-bar label{color:var(--muted);font-size:13px}
@@ -218,7 +217,7 @@ select,.btn,input[type=text]{background:var(--panel);border:1px solid var(--line
 </section>
 
 <main class="work" id="work" style="--side-w: 700px; --scope-h: 377.875px; --ctrl-h: auto; --schem-hm: 420px; --scope-hm: 340px;">
-  <section class="panel schem" aria-label="Schéma"><canvas id="sch" aria-label="Zone de dessin du schéma électrique" width="1250" height="348" style="cursor: default;"></canvas><button class="btn" id="grid-toggle" type="button" aria-pressed="true">Masquer la grille</button></section>
+  <section class="panel schem" aria-label="Schéma"><canvas id="sch" aria-label="Zone de dessin du schéma électrique" width="1250" height="348" style="cursor: default;"></canvas></section>
   <div class="split h" id="split-h" role="separator" aria-orientation="horizontal" tabindex="0" title="Glisser pour redimensionner (double-clic : taille d’origine)" aria-label="Séparateur entre schéma et oscilloscope"></div>
   <section class="panel ctrl" id="ctrl" aria-label="Paramètres des dipôles et de la fréquence">
     <div class="ctrl-head"><h2>Paramètres</h2><span class="hint">Curseur, valeur (4.7k, 100n, 10m) et bornes min et max</span><button class="btn" id="ctrl-fold" type="button" aria-expanded="false" aria-controls="ctrl-list">Déplier</button></div>
@@ -891,6 +890,14 @@ function buildToolbar(){
   const del=document.createElement('button'); del.type='button'; del.className='tool'; del.id='btn-del'; del.title='Supprimer la sélection (Suppr)';
   del.innerHTML='<svg viewBox="0 0 22 22" aria-hidden="true"><path d="M5 6h12M9 6V4h4v2M7 6l1 12h6l1-12"/></svg><span>Supprimer</span>';
   del.addEventListener('click',delSel); tb.appendChild(del);
+  const gr=document.createElement('button'); gr.type='button'; gr.className='tool'; gr.id='grid-toggle'; gr.title='Afficher ou masquer la grille';
+  gr.setAttribute('aria-pressed',String(S.showGrid));
+  gr.innerHTML=`<svg viewBox="0 0 22 22" aria-hidden="true"><path d="M3 3h16v16H3zM3 8.3h16M3 13.7h16M8.3 3v16M13.7 3v16"/></svg><span>${S.showGrid?'Masquer grille':'Afficher grille'}</span>`;
+  gr.addEventListener('click',()=>{
+    S.showGrid=!S.showGrid; gr.setAttribute('aria-pressed',String(S.showGrid));
+    gr.querySelector('span').textContent=S.showGrid?'Masquer grille':'Afficher grille'; redraw();
+  });
+  tb.appendChild(gr);
   syncTools();
 }
 function syncTools(){
@@ -1286,12 +1293,6 @@ $('#play').addEventListener('click',()=>{
   playRaf=requestAnimationFrame(tick);
 });
 $('#showv').addEventListener('change',e=>{ S.showV=e.target.checked; redraw(); });
-$('#grid-toggle').addEventListener('click',e=>{
-  S.showGrid=!S.showGrid;
-  e.currentTarget.setAttribute('aria-pressed',String(S.showGrid));
-  e.currentTarget.textContent=S.showGrid?'Masquer la grille':'Afficher la grille';
-  redraw();
-});
 $('#auto').addEventListener('change',e=>{ S.auto=e.target.checked; if(S.auto) schedule(); });
 $('#dur').addEventListener('input',e=>{
   const v=parseSI(e.target.value); const ok=isFinite(v)&&v>0;
