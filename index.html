@@ -211,6 +211,7 @@ select,.btn,input[type=text]{background:var(--panel);border:1px solid var(--line
   </div>
   <textarea id="io-text" spellcheck="false" aria-label="Circuit au format JSON"></textarea>
   <div class="io-actions">
+    <button class="btn" id="io-download" type="button">Télécharger le fichier .json</button>
     <button class="btn" id="io-copy" type="button">Copier le texte</button>
     <button class="btn" id="io-apply" type="button">Charger ce texte</button>
   </div>
@@ -1705,9 +1706,10 @@ function showIO(mode){
   $('#io').hidden=false;
   $('#io-title').textContent=mode==='save'?'Enregistrer le circuit':'Ouvrir un circuit';
   $('#io-hint').textContent=mode==='save'
-    ?'Copiez le texte, puis collez-le dans un fichier nommé par exemple circuit.json.'
+    ?'Téléchargez le fichier .json, ou copiez le texte ci-dessous.'
     :'Choisissez un fichier .json enregistré depuis ce simulateur, ou collez son contenu ci-dessous.';
   $('#io-open-row').hidden=mode!=='open';
+  $('#io-download').hidden=mode!=='save';
   $('#io-copy').hidden=mode!=='save';
   $('#io-apply').hidden=mode!=='open';
   $('#btn-open').setAttribute('aria-expanded',String(mode==='open'));
@@ -1746,6 +1748,12 @@ $('#io-file').addEventListener('change',e=>{
   rd.readAsText(f);
 });
 $('#io-apply').addEventListener('click',()=>loadCircuit($('#io-text').value));
+$('#io-download').addEventListener('click',()=>{
+  const url=URL.createObjectURL(new Blob([$('#io-text').value],{type:'application/json'}));
+  const a=document.createElement('a'); a.href=url; a.download='circuit.json';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+  say('Fichier circuit.json téléchargé.');
+});
 $('#io-copy').addEventListener('click',()=>{
   const ta=$('#io-text'); ta.select();
   const cb=(typeof navigator!=='undefined')&&navigator.clipboard;
