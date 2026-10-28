@@ -86,6 +86,7 @@ select,.btn,input[type=text]{background:var(--panel);border:1px solid var(--line
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:8px}
 .schem{grid-area:schem;position:relative;overflow:hidden;min-height:0}
 .schem canvas{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
+.schem #grid-toggle{position:absolute;top:10px;right:10px;z-index:1}
 .scope{grid-area:scope;display:flex;flex-direction:column;min-height:0;padding:10px;gap:8px}
 .scope-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
 .scope-bar label{color:var(--muted);font-size:13px}
@@ -215,7 +216,7 @@ select,.btn,input[type=text]{background:var(--panel);border:1px solid var(--line
 </section>
 
 <main class="work" id="work" style="--side-w: 700px; --scope-h: 377.875px; --ctrl-h: auto; --schem-hm: 420px; --scope-hm: 340px;">
-  <section class="panel schem" aria-label="Schéma"><canvas id="sch" aria-label="Zone de dessin du schéma électrique" width="1250" height="348" style="cursor: default;"></canvas></section>
+  <section class="panel schem" aria-label="Schéma"><canvas id="sch" aria-label="Zone de dessin du schéma électrique" width="1250" height="348" style="cursor: default;"></canvas><button class="btn" id="grid-toggle" type="button" aria-pressed="true">Masquer la grille</button></section>
   <div class="split h" id="split-h" role="separator" aria-orientation="horizontal" tabindex="0" title="Glisser pour redimensionner (double-clic : taille d’origine)" aria-label="Séparateur entre schéma et oscilloscope"></div>
   <section class="panel ctrl" id="ctrl" aria-label="Paramètres des dipôles et de la fréquence">
     <div class="ctrl-head"><h2>Paramètres</h2><span class="hint">Curseur, valeur (4.7k, 100n, 10m) et bornes min et max</span><button class="btn" id="ctrl-fold" type="button" aria-expanded="false" aria-controls="ctrl-list">Déplier</button></div>
@@ -433,7 +434,7 @@ const TYPES={
   GND:{label:'Masse',pre:'GND'}
 };
 const ORDER=['R','L','C','VDC','VAC','IDC','IAC','GND'];
-const S={comps:[],wires:new Set(),probes:[],sel:null,tool:'select',place:null,placeRot:{GND:1,VDC:1,VAC:1,IDC:1,IAC:1},
+const S={comps:[],wires:new Set(),probes:[],sel:null,tool:'select',place:null,placeRot:{GND:1,VDC:1,VAC:1,IDC:1,IAC:1},showGrid:true,
   view:{ox:70,oy:50,s:1},T:5e-3,auto:true,tc:0,showV:true,nextId:1,nextPid:1,count:{},sim:null,A:null,error:'',ghost:null,wirePrev:null,play:false,tm:0,
   phf:0,phref:'o',freqs:[],ac:null,acElems:null,fresRot:false,rms:false};
 
@@ -702,8 +703,10 @@ function draw(){
   ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.fillStyle=col.bg; ctx.fillRect(0,0,W,H);
   const {ox,oy,s}=S.view, g=G*s, P=(x,y)=>[ox+x*g,oy+y*g];
-  ctx.fillStyle=col.grid;
-  for(let gx=Math.floor(-ox/g);gx<=Math.ceil((W-ox)/g);gx++) for(let gy=Math.floor(-oy/g);gy<=Math.ceil((H-oy)/g);gy++) ctx.fillRect(ox+gx*g-1,oy+gy*g-1,2,2);
+  if(S.showGrid){
+    ctx.fillStyle=col.grid;
+    for(let gx=Math.floor(-ox/g);gx<=Math.ceil((W-ox)/g);gx++) for(let gy=Math.floor(-oy/g);gy<=Math.ceil((H-oy)/g);gy++) ctx.fillRect(ox+gx*g-1,oy+gy*g-1,2,2);
+  }
   // wires
   ctx.strokeStyle=col.ink; ctx.lineWidth=2; ctx.lineCap='round';
   ctx.beginPath();
@@ -1275,6 +1278,12 @@ $('#play').addEventListener('click',()=>{
   playRaf=requestAnimationFrame(tick);
 });
 $('#showv').addEventListener('change',e=>{ S.showV=e.target.checked; redraw(); });
+$('#grid-toggle').addEventListener('click',e=>{
+  S.showGrid=!S.showGrid;
+  e.currentTarget.setAttribute('aria-pressed',String(S.showGrid));
+  e.currentTarget.textContent=S.showGrid?'Masquer la grille':'Afficher la grille';
+  redraw();
+});
 $('#auto').addEventListener('change',e=>{ S.auto=e.target.checked; if(S.auto) schedule(); });
 $('#dur').addEventListener('input',e=>{
   const v=parseSI(e.target.value); const ok=isFinite(v)&&v>0;
