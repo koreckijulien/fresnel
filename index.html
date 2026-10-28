@@ -205,12 +205,10 @@ select,.btn,input[type=text]{background:var(--panel);border:1px solid var(--line
 <section class="panel io" id="io" aria-label="Enregistrer ou ouvrir un circuit" hidden="">
   <div class="io-head"><h2 id="io-title">Circuit</h2><button class="btn" id="io-close" type="button">Fermer</button></div>
   <p class="hint" id="io-hint"></p>
-  <div class="io-actions" id="io-open-row">
-    <button class="btn" id="io-pick" type="button">Choisir un fichier .json</button>
-    <input type="file" id="io-file" accept=".json,application/json" hidden="">
-  </div>
   <textarea id="io-text" spellcheck="false" aria-label="Circuit au format JSON"></textarea>
   <div class="io-actions">
+    <button class="btn" id="io-pick" type="button">Choisir un fichier .json</button>
+    <input type="file" id="io-file" accept=".json,application/json" hidden="">
     <button class="btn" id="io-download" type="button">Télécharger le fichier .json</button>
     <button class="btn" id="io-copy" type="button">Copier le texte</button>
     <button class="btn" id="io-apply" type="button">Charger ce texte</button>
@@ -1708,7 +1706,7 @@ function showIO(mode){
   $('#io-hint').textContent=mode==='save'
     ?'Téléchargez le fichier .json, ou copiez le texte ci-dessous.'
     :'Choisissez un fichier .json enregistré depuis ce simulateur, ou collez son contenu ci-dessous.';
-  $('#io-open-row').hidden=mode!=='open';
+  $('#io-pick').hidden=mode!=='open';
   $('#io-download').hidden=mode!=='save';
   $('#io-copy').hidden=mode!=='save';
   $('#io-apply').hidden=mode!=='open';
