@@ -26,7 +26,7 @@
   --bg:#e8ecf0; --panel:#f8fafb; --panel-2:#edf1f4; --ink:#141f29; --muted:#566574; --line:#c5cfd8;
   --accent:#0a6c93; --accent-ink:#ffffff; --accent-soft:#d3e9f2; --danger:#b3261e;
   --sch-bg:#fcfdfd; --sch-grid:#c3ced7;
-  --scope-bg:#0b1216; --scope-grid:#223039; --scope-ink:#aebcc6;
+  --scope-bg:#ffffff; --scope-grid:#d5dde3; --scope-ink:#4a5864;
   --t1:#1f9ad6; --t2:#ec8a2e; --t3:#36b36e; --t4:#d4559f; --t5:#8a74e8; --t6:#c9a227;
   --t7:#19b5a5; --t8:#e5534b; --t9:#9cc23a; --t10:#4a6cf0; --t11:#a8714a; --t12:#8c9aa5;
   --sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
@@ -37,12 +37,14 @@
     --bg:#0e1418; --panel:#162027; --panel-2:#1c2830; --ink:#e3eaef; --muted:#92a3b0; --line:#2a3843;
     --accent:#52c3ea; --accent-ink:#04222c; --accent-soft:#17323e; --danger:#ff8a80;
     --sch-bg:#101820; --sch-grid:#2a3944; color-scheme:dark;
+    --scope-bg:#000000; --scope-grid:#222b32; --scope-ink:#aebcc6;
   }
 }
 :root[data-theme="dark"]{
   --bg:#0e1418; --panel:#162027; --panel-2:#1c2830; --ink:#e3eaef; --muted:#92a3b0; --line:#2a3843;
   --accent:#52c3ea; --accent-ink:#04222c; --accent-soft:#17323e; --danger:#ff8a80;
   --sch-bg:#101820; --sch-grid:#2a3944; color-scheme:dark;
+  --scope-bg:#000000; --scope-grid:#222b32; --scope-ink:#aebcc6;
 }
 html,body{height:100%}
 body{box-sizing:border-box;display:flex;flex-direction:column;gap:10px;padding-block:12px;padding-inline:16px;background:var(--bg);color:var(--ink);font:14px/1.45 var(--sans)}
@@ -1137,6 +1139,13 @@ function drawFresnel(){
     const lines=wrapText(ctx,msg,R*1.5); lines.forEach((l,i)=>ctx.fillText(l,cx,cy+(i-(lines.length-1)/2)*18));
     return;
   }
+  const calc=calcResult();
+  if(calc&&!calc.err){
+    // the calculator chain must fit in the circle too
+    const kr=S.rms?Math.SQRT1_2:1; let sx=0, sy=0, m=0;
+    for(const t of calc.parts){ sx+=t.sg*t.z[0]; sy+=t.sg*t.z[1]; m=Math.max(m,Math.hypot(sx,sy)*kr,Math.hypot(t.z[0],t.z[1])*kr); }
+    if(m>(mx[calc.unit]||0)) mx[calc.unit]=m;
+  }
   const full={V:mx.V?niceCeil(mx.V*1.05):0,A:mx.A?niceCeil(mx.A*1.05):0};
   const rot=S.fresRot&&S.phf?2*Math.PI*S.phf*S.tc:0;
   for(const o of items){
@@ -1154,7 +1163,6 @@ function drawFresnel(){
     if(c<0) tx-=tw; tx=clamp(tx,3,W-tw-3); ty=clamp(ty,8,H-8);
     ctx.fillStyle=pc; ctx.fillText(txt,tx,ty);
   }
-  const calc=calcResult();
   if(calc&&!calc.err&&full[calc.unit]>0){
     // same transform as the phasor items: scale to the unit's full scale, rotate by (rot - a0)
     const s=R/full[calc.unit]*(S.rms?Math.SQRT1_2:1), th=rot-a0, cs=Math.cos(th), sn=Math.sin(th);
@@ -1747,7 +1755,7 @@ $('#io-copy').addEventListener('click',()=>{
 
 /* ---------- resizable panels ---------- */
 const work=$('#work'), mqStack=window.matchMedia('(max-width:900px)');
-const LAY={sideW:300,scopeH:280,ctrlH:240,ctrlFold:0,schemHm:420,scopeHm:340}, DEF=Object.assign({},LAY);
+const LAY={sideW:300,scopeH:280,ctrlH:240,ctrlFold:1,schemHm:420,scopeHm:340}, DEF=Object.assign({},LAY);
 function applyLayout(){
   work.style.setProperty('--side-w',LAY.sideW+'px'); work.style.setProperty('--scope-h',LAY.scopeH+'px');
   work.style.setProperty('--ctrl-h',LAY.ctrlFold?'auto':LAY.ctrlH+'px');
