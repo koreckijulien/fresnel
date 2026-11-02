@@ -817,8 +817,8 @@ function draw(){
         const nx=-d[1], ny=d[0], L=LEN*g;
         let sx,sy,ex,ey, hk=8*1.05;
         if(p.kind==='vd'){
-          // voltage: arrow beside the dipole, on the side opposite to the usual current offset, pointing to terminal A
-          const off=-20, a0=.7415, a1=.2585; hk=8*1.15*1.05;
+          // Voltage points to terminal A on the same side as the current marker.
+          const off=20, a0=.7415, a1=.2585; hk=8*1.15*1.05;
           sx=a[0]+d[0]*L*a0+nx*off; sy=a[1]+d[1]*L*a0+ny*off; ex=a[0]+d[0]*L*a1+nx*off; ey=a[1]+d[1]*L*a1+ny*off;
         }else{
           // current: short arrow on the lead inside the dipole, next to the terminal it leaves by (B, or A for sources)
