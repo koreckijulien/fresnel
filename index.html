@@ -434,7 +434,7 @@ const TYPES={
   GND:{label:'Masse',pre:'GND'}
 };
 const ORDER=['R','L','C','VDC','VAC','IDC','IAC','GND'];
-const S={comps:[],wires:new Set(),probes:[],sel:null,tool:'select',place:null,placeRot:{GND:1,VDC:1,VAC:1,IDC:1,IAC:1},showGrid:true,
+const S={comps:[],wires:new Set(),probes:[],sel:null,selWire:null,tool:'select',place:null,placeRot:{GND:1,VDC:1,VAC:1,IDC:1,IAC:1},showGrid:true,
   view:{ox:70,oy:50,s:1},T:5e-3,auto:true,tc:0,showV:true,nextId:1,nextPid:1,count:{},sim:null,A:null,error:'',ghost:null,wirePrev:null,play:false,tm:0,
   phf:0,phref:'o',freqs:[],ac:null,acElems:null,fresRot:false,rms:false};
 
@@ -482,9 +482,81 @@ function newComp(type,x,y,rot,extra){
   Object.assign(c,extra||{});
   return c;
 }
-function addSeg(x0,y0,x1,y1){
-  if(x0===x1){ for(let y=Math.min(y0,y1);y<Math.max(y0,y1);y++) S.wires.add(`${x0},${y},${x0},${y+1}`); }
-  else if(y0===y1){ for(let x=Math.min(x0,x1);x<Math.max(x0,x1);x++) S.wires.add(`${x},${y0},${x+1},${y0}`); }
+function addSeg(x0,y0,x1,y1,W=S.wires){
+  if(x0===x1){ for(let y=Math.min(y0,y1);y<Math.max(y0,y1);y++) W.add(`${x0},${y},${x0},${y+1}`); }
+  else if(y0===y1){ for(let x=Math.min(x0,x1);x<Math.max(x0,x1);x++) W.add(`${x},${y0},${x+1},${y0}`); }
+}
+function delSeg(x0,y0,x1,y1,W=S.wires){
+  const del=(a,b,c,d)=>{ W.delete(`${a},${b},${c},${d}`); W.delete(`${c},${d},${a},${b}`); };
+  if(x0===x1){ for(let y=Math.min(y0,y1);y<Math.max(y0,y1);y++) del(x0,y,x0,y+1); }
+  else if(y0===y1){ for(let x=Math.min(x0,x1);x<Math.max(x0,x1);x++) del(x,y0,x+1,y0); }
+}
+/* Wire editing: wires are unit segments; a "run" is a maximal straight chain of them
+   that stops at corners, junctions and component terminals. */
+function wireGraph(W){
+  const adj=new Map(), add=(a,b)=>{ const k=key(a[0],a[1]); if(!adj.has(k)) adj.set(k,[]); adj.get(k).push(b); };
+  for(const w of W){ const p=w.split(',').map(Number); add([p[0],p[1]],[p[2],p[3]]); add([p[2],p[3]],[p[0],p[1]]); }
+  return adj;
+}
+function termCount(c0,orig){
+  const m=new Map();
+  for(const c of S.comps) for(const t of (c===c0?orig:terms(c))){ const k=key(t[0],t[1]); m.set(k,(m.get(k)||0)+1); }
+  return m;
+}
+function extendRun(adj,tc,x,y,sx,sy){
+  let px=x+sx, py=y+sy;
+  for(;;){
+    const k=key(px,py), nb=adj.get(k)||[];
+    if(nb.length!==2||tc.get(k)||!nb.some(n=>n[0]===px+sx&&n[1]===py+sy)) break;
+    px+=sx; py+=sy;
+  }
+  return [px,py];
+}
+function runAt(wire){
+  const p=wire.split(',').map(Number), adj=wireGraph(S.wires), tc=termCount(null,null);
+  const sx=Math.sign(p[2]-p[0]), sy=Math.sign(p[3]-p[1]);
+  const a=extendRun(adj,tc,p[2],p[3],-sx,-sy), b=extendRun(adj,tc,p[0],p[1],sx,sy);
+  return {x0:Math.min(a[0],b[0]),y0:Math.min(a[1],b[1]),x1:Math.max(a[0],b[0]),y1:Math.max(a[1],b[1])};
+}
+function moveRun(snap,run,ox,oy){
+  const W=new Set(snap); delSeg(run.x0,run.y0,run.x1,run.y1,W);
+  if(!ox&&!oy) return snap;
+  const adj=wireGraph(snap), tc=termCount(null,null);
+  const linked=(x,y)=>{ const k=key(x,y); return tc.get(k)>0||(adj.get(k)||[]).length>1; };
+  addSeg(run.x0+ox,run.y0+oy,run.x1+ox,run.y1+oy,W);
+  if(linked(run.x0,run.y0)) addSeg(run.x0,run.y0,run.x0+ox,run.y0+oy,W);
+  if(linked(run.x1,run.y1)) addSeg(run.x1,run.y1,run.x1+ox,run.y1+oy,W);
+  return W;
+}
+function resizeRun(snap,run,end,v){
+  const W=new Set(snap), horiz=run.y0===run.y1, r={...run};
+  const lo=horiz?'x0':'y0', hi=horiz?'x1':'y1', k=end?hi:lo;
+  v=end?Math.max(v,run[lo]+1):Math.min(v,run[hi]-1);
+  const o=run[k]; r[k]=v;
+  const seg=(a,b)=>horiz?[a,run.y0,b,run.y0]:[run.x0,a,run.x0,b];
+  if(end?v>o:v<o) addSeg(...seg(o,v),W); else if(v!==o) delSeg(...seg(o,v),W);
+  return {W,run:r};
+}
+// Rubber-band the wires attached to a dipole that moved by (dx,dy).
+function reflow(snap,c,orig,dx,dy){
+  if(!dx&&!dy) return snap;
+  const W=new Set(snap), adj=wireGraph(snap), tc=termCount(c,orig), ok=new Set(orig.map(t=>key(t[0],t[1])));
+  for(const t of orig){
+    const k=key(t[0],t[1]), nb=adj.get(k)||[], tx=t[0]+dx, ty=t[1]+dy;
+    if(!nb.length) continue;
+    let ex=t[0], ey=t[1];
+    if(nb.length===1&&tc.get(k)===1){
+      const sx=nb[0][0]-t[0], sy=nb[0][1]-t[1], o=extendRun(adj,tc,t[0],t[1],sx,sy);
+      if(!ok.has(key(o[0],o[1]))){
+        const len=Math.abs(o[0]-t[0])+Math.abs(o[1]-t[1]), along=-(dx*sx+dy*sy), nl=len+along;
+        delSeg(t[0],t[1],o[0],o[1],W);
+        if(nl>0){ ex=o[0]-sx*nl; ey=o[1]-sy*nl; } else { ex=o[0]; ey=o[1]; }
+        addSeg(o[0],o[1],ex,ey,W);
+      }
+    }
+    for(const s of route(ex,ey,tx,ty)) addSeg(...s,W);
+  }
+  return W;
 }
 function route(x0,y0,x1,y1){
   if(x0===x1||y0===y1) return [[x0,y0,x1,y1]];
@@ -716,6 +788,12 @@ function draw(){
     ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); bump(p[0]+','+p[1]); bump(p[2]+','+p[3]);
   }
   ctx.stroke();
+  if(S.selWire){
+    const r=S.selWire, a=P(r.x0,r.y0), b=P(r.x1,r.y1);
+    ctx.strokeStyle=col.accent; ctx.lineWidth=3.5; ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); ctx.stroke();
+    ctx.fillStyle=col.bg; ctx.lineWidth=2; for(const q of [a,b]){ ctx.beginPath(); ctx.rect(q[0]-4.5,q[1]-4.5,9,9); ctx.fill(); ctx.stroke(); }
+    ctx.lineWidth=2;
+  }
   for(const c of S.comps) for(const t of terms(c)) bump(key(t[0],t[1]));
   ctx.fillStyle=col.ink;
   for(const [k,d] of deg){ if(d>=3){ const [x,y]=k.split(',').map(Number), q=P(x,y); ctx.beginPath(); ctx.arc(q[0],q[1],4,0,Math.PI*2); ctx.fill(); } }
@@ -904,11 +982,11 @@ function syncTools(){
   document.querySelectorAll('#toolbar [data-place]').forEach(b=>b.setAttribute('aria-pressed',String(S.tool==='place'&&S.place===b.dataset.place)));
   sch.style.cursor=S.tool==='select'?'default':S.tool==='erase'?'not-allowed':'crosshair';
 }
-function setTool(t){ S.tool=t; S.place=null; S.ghost=null; S.wirePrev=null; syncTools(); hint(); redraw(); }
+function setTool(t){ S.tool=t; S.place=null; S.ghost=null; S.wirePrev=null; S.selWire=null; syncTools(); hint(); redraw(); }
 function say(msg,err){ const s=$('#status'); s.textContent=msg; s.classList.toggle('err',!!err); }
 function hint(){
   if(S.error){ say(S.error,true); return; }
-  const m={select:'Sélection : cliquez un composant pour le régler, faites-le glisser pour le déplacer, faites glisser le fond pour vous déplacer, molette pour zoomer.',
+  const m={select:'Sélection : cliquez un composant pour le régler, faites-le glisser pour le déplacer (les fils suivent). Cliquez un fil pour le déplacer ou tirer ses extrémités. Fond : déplacement, molette : zoom.',
     wire:'Fil : faites glisser d’un point de la grille à un autre. Les fils se rejoignent sur les points de la grille.',
     erase:'Gomme : cliquez ou balayez un fil ou un composant pour l’effacer.',
     probe:'Sonde : cliquez un fil ou une borne pour tracer un potentiel, un composant pour tracer son courant (Maj : sa tension, Alt : sa puissance).',
@@ -943,8 +1021,12 @@ sch.addEventListener('pointerdown',ev=>{
   sch.setPointerCapture(ev.pointerId);
   const w=toWorld(ev), sx=Math.round(w.gx), sy=Math.round(w.gy);
   if(S.tool==='select'){
-    const c=hitComp(w.gx,w.gy,.6);
-    if(c){ select(c.id); drag={kind:'comp',c,sx,sy,ox:c.x,oy:c.y,moved:false}; }
+    const c=hitComp(w.gx,w.gy,.6), sw=S.selWire;
+    const he=(!c&&sw)?[[sw.x0,sw.y0],[sw.x1,sw.y1]].findIndex(p=>Math.hypot(w.gx-p[0],w.gy-p[1])<.4):-1;
+    const wr=(!c&&he<0)?hitWire(w.gx,w.gy,.3):null;
+    if(c){ select(c.id); drag={kind:'comp',c,sx,sy,ox:c.x,oy:c.y,moved:false,snap:new Set(S.wires),orig:terms(c).map(t=>t.slice())}; }
+    else if(he>=0){ drag={kind:'wend',end:he,run:{...sw},snap:new Set(S.wires),moved:false}; }
+    else if(wr){ selectWire(runAt(wr)); drag={kind:'wmove',run:{...S.selWire},gx:w.gx,gy:w.gy,snap:new Set(S.wires),moved:false}; }
     else{ select(null); drag={kind:'pan',px:w.px,py:w.py,ox:S.view.ox,oy:S.view.oy}; }
   }else if(S.tool==='wire'){ drag={kind:'wire',x:sx,y:sy}; S.wirePrev=null; }
   else if(S.tool==='erase'){ drag={kind:'erase',changed:false}; eraseAt(w.gx,w.gy,drag); }
@@ -958,7 +1040,15 @@ sch.addEventListener('pointermove',ev=>{
   if(drag.kind==='pan'){ S.view.ox=drag.ox+(w.px-drag.px); S.view.oy=drag.oy+(w.py-drag.py); redraw(); }
   else if(drag.kind==='comp'){
     const nx=drag.ox+sx-drag.sx, ny=drag.oy+sy-drag.sy;
-    if(nx!==drag.c.x||ny!==drag.c.y){ drag.c.x=nx; drag.c.y=ny; drag.moved=true; redraw(); }
+    if(nx!==drag.c.x||ny!==drag.c.y){ drag.c.x=nx; drag.c.y=ny; drag.moved=true; S.wires=reflow(drag.snap,drag.c,drag.orig,nx-drag.ox,ny-drag.oy); redraw(); }
+  }else if(drag.kind==='wmove'){
+    const r=drag.run, horiz=r.y0===r.y1, o=Math.round(horiz?w.gy-drag.gy:w.gx-drag.gx);
+    S.wires=moveRun(drag.snap,r,horiz?0:o,horiz?o:0);
+    S.selWire=horiz?{...r,y0:r.y0+o,y1:r.y1+o}:{...r,x0:r.x0+o,x1:r.x1+o};
+    drag.moved=o!==0; redraw();
+  }else if(drag.kind==='wend'){
+    const r=drag.run, res=resizeRun(drag.snap,r,drag.end,Math.round(r.y0===r.y1?w.gx:w.gy));
+    S.wires=res.W; S.selWire=res.run; drag.moved=true; redraw();
   }else if(drag.kind==='wire'){ S.wirePrev=(sx===drag.x&&sy===drag.y)?null:route(drag.x,drag.y,sx,sy); redraw(); }
   else if(drag.kind==='erase'){ eraseAt(w.gx,w.gy,drag); }
 });
@@ -966,6 +1056,7 @@ function endDrag(ev){
   if(!drag) return;
   const w=toWorld(ev), sx=Math.round(w.gx), sy=Math.round(w.gy), d=drag; drag=null;
   if(d.kind==='comp'&&d.moved){ schedule(); renderInspector(); }
+  else if((d.kind==='wmove'||d.kind==='wend')&&d.moved){ schedule(); redraw(); }
   else if(d.kind==='wire'){
     const segs=route(d.x,d.y,sx,sy); S.wirePrev=null;
     if(!(sx===d.x&&sy===d.y)){ segs.forEach(s=>addSeg(...s)); schedule(); }
@@ -1004,13 +1095,17 @@ function removeComp(id){
   S.comps=S.comps.filter(c=>c.id!==id); S.probes=S.probes.filter(p=>p.cid!==id);
   if(S.sel===id) S.sel=null; renderInspector(); renderCurves(); redraw();
 }
-function select(id){ S.sel=id; renderInspector(); redraw(); }
+function select(id){ S.sel=id; S.selWire=null; renderInspector(); redraw(); }
+function selectWire(run){ S.sel=null; S.selWire=run; renderInspector(); redraw(); }
 function rotate(){
   if(S.tool==='place'&&S.place){ S.placeRot[S.place]=((S.placeRot[S.place]||0)+1)%4; redraw(); return; }
   const c=S.comps.find(c=>c.id===S.sel); if(!c) return;
   c.rot=(c.rot+1)%4; schedule(); redraw();
 }
-function delSel(){ if(S.sel!=null){ removeComp(S.sel); schedule(); } }
+function delSel(){
+  if(S.selWire){ const r=S.selWire; delSeg(r.x0,r.y0,r.x1,r.y1); S.selWire=null; schedule(); redraw(); }
+  else if(S.sel!=null){ removeComp(S.sel); schedule(); }
+}
 document.addEventListener('keydown',ev=>{
   if(ev.target.closest&&ev.target.closest('input,select,textarea')) return;
   if(ev.ctrlKey||ev.metaKey||ev.altKey) return;
@@ -1342,7 +1437,7 @@ const EXAMPLES=[
    wires:[[19,7,9,7],[19,4,12,4]],
    probes:[['vd','R1'],['i','R1'],['vd','R2'],['i','R2'],['vd','L1'],['i','CL'],['vd','C1'],['i','C1'],['vd','GBF1'],['i','GBF1']]}
 ];
-function reset(){ S.comps=[]; S.wires=new Set(); S.probes=[]; S.sel=null; S.nextId=1; S.nextPid=1; S.count={}; S.tc=0; S.sim=null; }
+function reset(){ S.comps=[]; S.wires=new Set(); S.selWire=null; S.probes=[]; S.sel=null; S.nextId=1; S.nextPid=1; S.count={}; S.tc=0; S.sim=null; }
 function loadExample(i){
   const ex=EXAMPLES[i]; reset();
   for(const d of ex.comps) S.comps.push(newComp(d[0],d[1],d[2],d[3],d[4]));
