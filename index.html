@@ -1152,7 +1152,9 @@ function drawFresnel(){
     for(const t of calc.parts){ sx+=t.sg*t.z[0]; sy+=t.sg*t.z[1]; m=Math.max(m,Math.hypot(sx,sy)*kr,Math.hypot(t.z[0],t.z[1])*kr); }
     if(m>(mx[calc.unit]||0)) mx[calc.unit]=m;
   }
-  const full={V:mx.V?niceCeil(mx.V*1.05):0,A:mx.A?niceCeil(mx.A*1.05):0};
+  // full scale = next multiple of 50 V / 0.5 A; below one step, fall back to a 1-2-5 scale
+  const fullOf=(m,st)=>!m?0:m<st?niceCeil(m*1.05):Math.ceil(m/st-1e-9)*st;
+  const full={V:fullOf(mx.V,50),A:fullOf(mx.A,0.5)};
   const rot=S.fresRot&&S.phf?2*Math.PI*S.phf*S.tc:0;
   for(const o of items){
     const pc=col.t[o.p.ci]; ctx.strokeStyle=pc; ctx.fillStyle=pc;
