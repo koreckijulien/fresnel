@@ -4,7 +4,7 @@
   "start_url": "./index.html",
   "display": "standalone",
   "scope": "./",
-  "id": "./",
+  "id": "/fresnel/",
   "icons": [
     {
       "src": "icon-192.png",
